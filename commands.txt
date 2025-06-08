@@ -1,0 +1,77 @@
+# Comandos do Bot
+
+## 🎵 Música
+
+### /music [busca/URL]
+Adiciona uma música à fila ou começa a tocar imediatamente.
+- Se você fornecer uma URL do YouTube, o bot tocará diretamente
+- Se você fornecer um texto, o bot buscará no YouTube
+- Exemplo: `/music https://www.youtube.com/watch?v=dQw4w9WgXcQ`
+- Exemplo: `/music never gonna give you up`
+
+### /now
+Mostra qual música está tocando atualmente.
+- Exemplo: `/now`
+
+### /stop
+Para a reprodução atual e limpa a fila.
+- Exemplo: `/stop`
+
+### /pause
+Pausa a música atual.
+- Exemplo: `/pause`
+
+### /resume
+Retoma a música pausada.
+- Exemplo: `/resume`
+
+### /skip
+Inicia uma votação para pular a música atual.
+- Requer que pelo menos metade dos usuários no canal de voz (excluindo bots) votem
+- Exemplo: `/skip`
+
+### /queue
+Mostra a lista de músicas na fila.
+- Exemplo: `/queue`
+
+## 📝 Notas Importantes
+
+### Permissões Necessárias
+- O bot precisa ter permissão para:
+  - Entrar em canais de voz
+  - Tocar áudio
+  - Gerenciar mensagens (para apagar mensagens)
+  - Enviar mensagens
+  - Ler histórico de mensagens
+
+### Requisitos do Usuário
+- Você precisa estar em um canal de voz para usar os comandos de música
+- Para o comando skip, é necessário que pelo menos metade dos usuários no canal de voz votem
+
+### Gerenciamento de Mensagens
+- Mensagens de comando são apagadas automaticamente após o processamento
+- Mensagens de resposta do bot são apagadas após 1 minuto
+- Mensagens de erro são apagadas após 1 minuto
+
+### Fila de Músicas
+- Cada servidor tem sua própria fila de músicas
+- A fila é limpa quando o bot desconecta do canal de voz
+- Músicas são reproduzidas na ordem em que foram adicionadas
+
+NOTAS IMPORTANTES:
+-----------------
+• O bot precisa ter permissões de:
+  - Enviar mensagens
+  - Gerenciar mensagens
+  - Conectar-se a canais de voz
+  - Falar em canais de voz
+
+• O usuário que executa os comandos precisa estar em um canal de voz
+
+• Mensagens de comando são deletadas automaticamente após processamento
+
+• Mensagens de erro permanecem visíveis para facilitar o diagnóstico
+
+• A fila de músicas é mantida por servidor
+
+• O bot reconecta automaticamente em caso de problemas de rede 
