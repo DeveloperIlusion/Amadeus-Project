@@ -55,43 +55,49 @@ def download_ffmpeg():
             total_size = sum(info.file_size for info in zip_ref.filelist)
             with tqdm(total=total_size, unit='B', unit_scale=True, desc="Extraindo") as pbar:
                 for file in zip_ref.filelist:
+                    # Extrai para uma pasta temporária
                     zip_ref.extract(file, ffmpeg_dir / "temp")
                     pbar.update(file.file_size)
         
-        # Move a pasta bin inteira
-        temp_bin = next((ffmpeg_dir / "temp").glob("**/bin"))
-        if temp_bin.exists():
-            # Remove a pasta bin existente se houver
-            if ffmpeg_bin.exists():
-                shutil.rmtree(ffmpeg_bin)
-            # Move a pasta bin inteira
-            shutil.move(str(temp_bin), str(ffmpeg_dir))
-            print("Pasta bin movida com sucesso!")
-            
-            # Verifica se todos os arquivos necessários estão presentes
-            required_files = [
-                "avcodec-62.dll",
-                "avdevice-62.dll",
-                "avfilter-11.dll",
-                "avformat-62.dll",
-                "avutil-60.dll",
-                "ffmpeg.exe",
-                "swresample-6.dll",
-                "swscale-9.dll"
-            ]
-            
-            missing_files = [f for f in required_files if not (ffmpeg_bin / f).exists()]
-            if missing_files:
-                print(f"Erro: Arquivos faltando na pasta bin: {', '.join(missing_files)}")
-                return None
-            else:
-                print("Todos os arquivos necessários foram encontrados!")
-        else:
-            print("Erro: Pasta bin não encontrada no arquivo extraído!")
-            return None
+        # Move todo o conteúdo da pasta temporária para a pasta ffmpeg
+        temp_dir = ffmpeg_dir / "temp"
+        # Encontra a pasta raiz do FFmpeg (a primeira pasta dentro de temp)
+        ffmpeg_root = next(temp_dir.iterdir())
+        if ffmpeg_root.is_dir():
+            # Move todo o conteúdo da pasta raiz para ffmpeg_dir
+            for item in ffmpeg_root.iterdir():
+                if (ffmpeg_dir / item.name).exists():
+                    if (ffmpeg_dir / item.name).is_dir():
+                        shutil.rmtree(ffmpeg_dir / item.name)
+                    else:
+                        (ffmpeg_dir / item.name).unlink()
+                shutil.move(str(item), str(ffmpeg_dir))
+            # Remove a pasta raiz vazia
+            shutil.rmtree(ffmpeg_root)
         
-        # Limpa arquivos temporários
-        shutil.rmtree(ffmpeg_dir / "temp")
+        # Remove a pasta temporária
+        shutil.rmtree(temp_dir)
+        
+        # Verifica se todos os arquivos necessários estão presentes
+        required_files = [
+            "avcodec-62.dll",
+            "avdevice-62.dll",
+            "avfilter-11.dll",
+            "avformat-62.dll",
+            "avutil-60.dll",
+            "ffmpeg.exe",
+            "swresample-6.dll",
+            "swscale-9.dll"
+        ]
+        
+        missing_files = [f for f in required_files if not (ffmpeg_bin / f).exists()]
+        if missing_files:
+            print(f"Erro: Arquivos faltando na pasta bin: {', '.join(missing_files)}")
+            return None
+        else:
+            print("Todos os arquivos necessários foram encontrados!")
+        
+        # Limpa arquivo zip
         zip_path.unlink()
         
         print("FFmpeg configurado com sucesso!")
