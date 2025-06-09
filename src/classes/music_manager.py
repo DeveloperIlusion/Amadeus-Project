@@ -195,96 +195,76 @@ class MusicManager:
 
     async def play_next(self, voice_client, guild_id):
         """Toca a próxima música da fila"""
-        queue = self.get_queue(guild_id)
-        print(f"[DEBUG] play_next chamado. Tamanho da fila: {len(queue)}")
-        
-        if not queue:
+        if not self.queue:
             print("[DEBUG] Fila vazia, retornando")
             return
 
+        # Verifica se o FFmpeg está funcionando
         try:
-            # Verifica se já está tocando
-            if voice_client.is_playing():
-                print("[DEBUG] Já está tocando, aguardando...")
-                return
+            result = subprocess.run(
+                [str(self.ffmpeg_path), "-version"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            print(f"[DEBUG] FFmpeg versão: {result.stdout.splitlines()[0]}")
+        except Exception as e:
+            print(f"[DEBUG] Erro ao verificar FFmpeg: {e}")
+            return
 
-            # Pega a próxima música da fila
-            next_song = queue[0]
-            info = next_song['info']
-            title = info.get('title', 'Música desconhecida')
-            url = info['url']
-            print(f"[DEBUG] Próxima música: {title}")
-            print(f"[DEBUG] URL: {url}")
+        # Verifica se já está tocando
+        if voice_client.is_playing():
+            return
 
-            # Atualiza a música atual
-            self.current_songs[guild_id] = title
-            # Reseta o estado de votação de skip
-            self.end_skip_vote(guild_id)
+        # Pega a próxima música da fila
+        queue = self.queue[guild_id]
+        if not queue:
+            return
 
-            # Configurações do FFmpeg para evitar cortes
+        next_song = queue[0]
+        print(f"[DEBUG] Próxima música: {next_song['title']}")
+        print(f"[DEBUG] URL: {next_song['url']}")
+
+        def after_playing(error):
+            """Callback após a música terminar"""
+            print("[DEBUG] Música terminou, chamando play_next")
+            if queue:
+                queue.popleft()  # Remove a música que acabou de tocar
+                print(f"[DEBUG] Música removida da fila após terminar. Tamanho atual: {len(queue)}")
+            asyncio.run_coroutine_threadsafe(self.play_next(voice_client, guild_id), self.bot.loop)
+
+        try:
+            # Configurações do FFmpeg para melhor qualidade e estabilidade
             ffmpeg_options = {
-                'options': '-vn -b:a 192k -ar 48000 -ac 2',
-                'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -analyzeduration 0 -loglevel 0'
+                'options': '-vn -b:a 192k -ar 48000 -ac 2 -loglevel error',
+                'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
             }
 
-            # Função para tocar a próxima música
-            def after_playing(error):
-                if error:
-                    print(f"[DEBUG] Erro na reprodução: {error}")
-                print("[DEBUG] Música terminou, chamando play_next")
-                # Remove a música da fila apenas quando terminar de tocar
-                if queue:
-                    queue.popleft()
-                    print(f"[DEBUG] Música removida da fila após terminar. Tamanho atual: {len(queue)}")
-                # Cria uma nova task para tocar a próxima música
-                asyncio.run_coroutine_threadsafe(
-                    self.play_next(voice_client, guild_id),
-                    self.bot.loop
-                )
-
-            print("[DEBUG] Iniciando FFmpegPCMAudio")
-            
-            # Tenta baixar o áudio primeiro
-            with yt_dlp.YoutubeDL(self.ytdl_opts) as ydl:
-                try:
-                    print("[DEBUG] Baixando áudio...")
-                    info = ydl.extract_info(url, download=False)
-                    if not info:
-                        raise Exception("Não foi possível obter informações do vídeo")
-                    audio_url = info.get('url')
-                    if not audio_url:
-                        raise Exception("URL do áudio não encontrada")
-                    print("[DEBUG] Áudio baixado com sucesso")
-                except Exception as e:
-                    print(f"[DEBUG] Erro ao baixar áudio: {e}")
-                    # Remove a música da fila se houver erro
-                    if queue:
-                        queue.popleft()
-                    raise e
-
             # Toca a música
+            print("[DEBUG] Iniciando FFmpegPCMAudio")
+            print(f"[DEBUG] Caminho do FFmpeg: {self.ffmpeg_path}")
+            print(f"[DEBUG] Opções do FFmpeg: {ffmpeg_options}")
+            
             voice_client.play(
                 discord.FFmpegPCMAudio(
-                    audio_url,
-                    executable=self.ffmpeg_path,
+                    next_song['url'],
+                    executable=str(self.ffmpeg_path),
                     **ffmpeg_options
                 ),
                 after=after_playing
             )
-            print("[DEBUG] FFmpegPCMAudio iniciado")
+            print("[DEBUG] FFmpegPCMAudio iniciado com sucesso")
 
             # Envia mensagem no canal de texto apenas quando uma nova música começa a tocar
-            if guild_id in self.text_channels:
-                channel = self.text_channels[guild_id]
+            if hasattr(voice_client, 'channel') and voice_client.channel:
                 try:
-                    await channel.send(f"🎵 Tocando agora: **{title}**")
+                    await voice_client.channel.send(f"🎵 Tocando agora: **{next_song['title']}**")
                     print("[DEBUG] Mensagem de reprodução enviada")
                 except Exception as e:
                     print(f"[DEBUG] Erro ao enviar mensagem de reprodução: {e}")
 
         except Exception as e:
-            print(f"[DEBUG] Erro detalhado ao tocar próxima música: {str(e)}")
-            print(f"[DEBUG] Tipo do erro: {type(e)}")
+            print(f"[DEBUG] Erro ao tocar música: {e}")
             import traceback
             print(f"[DEBUG] Stack trace: {traceback.format_exc()}")
             # Se der erro, tenta tocar a próxima
