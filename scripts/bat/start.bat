@@ -29,7 +29,7 @@ pip install -r requirements.txt
 REM Verifica se o FFmpeg está instalado
 if not exist libraries\ffmpeg\bin\ffmpeg.exe (
     echo FFmpeg nao encontrado! Baixando FFmpeg...
-    python src\config\setup.py
+    python setup.py
 )
 
 REM Inicia o bot

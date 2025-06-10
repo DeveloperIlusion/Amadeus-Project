@@ -3,6 +3,7 @@ Arquivo contendo funções utilitárias para o projeto.
 """
 import os
 from pathlib import Path
+import sys
 
 def get_project_root() -> Path:
     """
@@ -29,7 +30,12 @@ def get_ffmpeg_path() -> str:
     """
     path = get_resource_path("libraries/ffmpeg/bin/ffmpeg.exe")
     if not os.path.exists(path):
-        raise FileNotFoundError(f"FFmpeg não encontrado em: {path}")
+        print(f"[AVISO] FFmpeg não encontrado em: {path}")
+        print("[AVISO] Tentando instalar FFmpeg...")
+        import subprocess
+        subprocess.run([sys.executable, "setup.py"])
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"FFmpeg não encontrado em: {path}")
     return path
 
 def ensure_directory_exists(path: str) -> None:

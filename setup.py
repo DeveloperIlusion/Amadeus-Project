@@ -13,8 +13,7 @@ from tqdm import tqdm
 
 def get_project_root():
     """Retorna o diretório raiz do projeto"""
-    # Como agora estamos em src/dependencies, precisamos subir 3 níveis
-    return Path(__file__).parent.parent.parent
+    return Path(__file__).parent
 
 class DownloadProgressBar(tqdm):
     def update_to(self, b=1, bsize=1, tsize=None):
@@ -37,6 +36,7 @@ def download_ffmpeg():
     
     # Cria diretórios necessários
     ffmpeg_dir.mkdir(parents=True, exist_ok=True)
+    ffmpeg_bin.mkdir(parents=True, exist_ok=True)
     
     # URL do FFmpeg para Windows (versão minimal com apenas os arquivos necessários)
     ffmpeg_url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip"
@@ -113,7 +113,7 @@ def setup_environment():
     
     # Instala dependências do requirements.txt
     print("Instalando dependências...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "-r", str(get_project_root() / "src" / "dependencies" / "requirements.txt")])
+    subprocess.run([sys.executable, "-m", "pip", "install", "-r", str(get_project_root() / "requirements.txt")])
     
     # Configura FFmpeg
     ffmpeg_path = download_ffmpeg()
