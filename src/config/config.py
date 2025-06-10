@@ -4,13 +4,20 @@ Aqui ficam todas as constantes e configurações do sistema.
 """
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 from ..functions import get_ffmpeg_path, get_resource_path
 
 # Obtém o diretório raiz do projeto
 ROOT_DIR = Path(__file__).parent.parent.parent
 
+# Carrega as variáveis de ambiente do arquivo .env
+env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
+
 # Token do bot
-BOT_TOKEN = 'MTM4MDg3NDU1NTIwNzMyMzY1OQ.Ge7AJ5.sSx2WjIi-ZJlwLlge8sOjpOzhxdIdSV-n3KJI8'
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+if not BOT_TOKEN:
+    raise ValueError("Token do bot não encontrado! Verifique se o arquivo .env existe em src/config/ e contém BOT_TOKEN.")
 
 # Configurações do FFmpeg
 FFMPEG_PATH = os.path.join(ROOT_DIR, "ffmpeg", "bin", "ffmpeg.exe")

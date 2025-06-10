@@ -1,8 +1,12 @@
 # FFmpeg
-libraries/ffmpeg/
+libraries/
 
 # Cookies do YouTube
-src/config/cookies.json
+src/config/cookies.txt
+
+# Arquivos de ambiente
+.env
+src/config/.env
 
 # Python
 __pycache__/
@@ -38,4 +42,8 @@ ENV/
 *.swo
 
 # Logs
-*.log 
+*.log
+
+# Arquivos do sistema
+.DS_Store
+Thumbs.db 
