@@ -24,30 +24,15 @@ COMMAND_PREFIX = "!"  # Prefixo para comandos do bot
 # Configurações do YouTube
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
-    'postprocessors': [{
-        'key': 'FFmpegExtractAudio',
-        'preferredcodec': 'mp3',
-        'preferredquality': '192',
-    }],
-    'default_search': 'ytsearch',
-    'quiet': True,
-    'no_warnings': True,
+    'noplaylist': True,
     'nocheckcertificate': True,
-    'prefer_insecure': True,
-    'geo_bypass': True,
-    'geo_bypass_country': 'BR',
-    'http_headers': {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-us,en;q=0.5',
-        'Sec-Fetch-Mode': 'navigate',
-    },
-    'extractor_args': {
-        'youtube': {
-            'skip': ['dash', 'hls'],
-            'player_skip': ['js', 'configs', 'webpage']
-        }
-    }
+    'ignoreerrors': False,
+    'logtostderr': False,
+    'quiet': False,
+    'no_warnings': False,
+    'default_search': 'auto',
+    'source_address': '0.0.0.0',
+    'cookiefile': COOKIES_PATH
 }
 
 # Configurações de mensagens

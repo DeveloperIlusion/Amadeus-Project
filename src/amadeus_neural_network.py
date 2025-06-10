@@ -25,31 +25,39 @@ class Music(commands.Cog):
     async def send_and_delete(self, ctx, message, success=True):
         """Envia uma mensagem e a deleta após um tempo"""
         try:
-            # Deleta a mensagem do comando imediatamente
-            try:
-                await ctx.message.delete()
-            except Exception as e:
-                print(f"Erro ao deletar comando: {e}")
+            # Deleta a mensagem do comando imediatamente se for sucesso
+            if success:
+                try:
+                    await ctx.message.delete()
+                except Exception as e:
+                    print(f"[DEBUG] Erro ao deletar comando: {e}")
             
             # Envia a resposta
             response = await ctx.send(message)
             
             # Define o tempo de espera (1 minuto para sucesso, 3 para erro)
-            wait_time = MESSAGE_DELETE_TIMES['success'] if success else MESSAGE_DELETE_TIMES['error']
+            wait_time = 60 if success else 180
             
             # Espera e deleta a resposta em uma task separada
             async def delete_response():
                 try:
                     await asyncio.sleep(wait_time)
                     await response.delete()
+                    
+                    # Se for erro, também deleta a mensagem do comando
+                    if not success:
+                        try:
+                            await ctx.message.delete()
+                        except Exception as e:
+                            print(f"[DEBUG] Erro ao deletar comando após erro: {e}")
                 except Exception as e:
-                    print(f"Erro ao deletar resposta: {e}")
+                    print(f"[DEBUG] Erro ao deletar resposta: {e}")
             
             # Cria uma task separada para deletar a resposta
             asyncio.create_task(delete_response())
             
         except Exception as e:
-            print(f"Erro ao gerenciar mensagens: {e}")
+            print(f"[DEBUG] Erro ao gerenciar mensagens: {e}")
 
     @commands.command(name='music')
     async def music(self, ctx, *, search):
@@ -57,51 +65,28 @@ class Music(commands.Cog):
         try:
             # Verifica se o usuário está em um canal de voz
             if not ctx.author.voice:
-                await ctx.send("❌ Você precisa estar em um canal de voz para usar este comando!")
+                await self.send_and_delete(ctx, "❌ Você precisa estar em um canal de voz para usar este comando!", False)
                 return
 
             # Conecta ao canal de voz
             voice_client = await self.music.join_voice(ctx.author.voice.channel)
             if not voice_client:
-                await ctx.send("❌ Não foi possível conectar ao canal de voz!")
+                await self.send_and_delete(ctx, "❌ Não foi possível conectar ao canal de voz!", False)
                 return
 
             # Toca a música
-            result = await self.music.play_audio(voice_client, search, ctx.channel)
+            result = await self.music.play_audio(voice_client, ctx.channel, search)
             
             if result['success']:
-                # Se a música foi adicionada com sucesso, apaga a mensagem do comando
-                await ctx.message.delete()
-                
-                # Envia a mensagem de resposta
-                bot_message = await ctx.send(result['message'])
-                
-                # Se a música não estiver tocando (está na fila), apaga a mensagem após 1 minuto
-                if not result['is_playing']:
-                    await asyncio.sleep(60)
-                    try:
-                        await bot_message.delete()
-                    except:
-                        pass
+                # Se a música foi adicionada com sucesso, envia mensagem e deleta após 1 minuto
+                await self.send_and_delete(ctx, result['message'], True)
             else:
-                # Se houve erro, envia mensagem de erro e apaga ambas as mensagens após 1 minuto
-                error_message = await ctx.send(f"❌ Erro ao tocar música: {result['error']}")
-                await asyncio.sleep(60)
-                try:
-                    await ctx.message.delete()
-                    await error_message.delete()
-                except:
-                    pass
+                # Se houve erro, envia mensagem de erro e deleta após 3 minutos
+                await self.send_and_delete(ctx, f"❌ Erro ao tocar música: {result['error']}", False)
 
         except Exception as e:
             print(f"Erro no comando music: {e}")
-            error_message = await ctx.send(f"❌ Ocorreu um erro: {str(e)}")
-            await asyncio.sleep(60)
-            try:
-                await ctx.message.delete()
-                await error_message.delete()
-            except:
-                pass
+            await self.send_and_delete(ctx, f"❌ Ocorreu um erro: {str(e)}", False)
 
     @commands.command(name='stop')
     async def stop(self, ctx):

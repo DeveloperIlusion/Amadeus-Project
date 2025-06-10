@@ -7,6 +7,9 @@ import os
 from collections import deque
 import time
 from ..functions import get_ffmpeg_path, get_resource_path
+from ..config.config import YTDL_OPTIONS, COOKIES_PATH
+import certifi
+import ssl
 
 class MusicManager:
     """
@@ -36,56 +39,15 @@ class MusicManager:
         self.bot.loop.create_task(self.check_empty_channels())
         
         # Configura o caminho do arquivo de cookies
-        self.cookies_path = get_resource_path("src/config/cookies.txt")
+        self.cookies_path = COOKIES_PATH
         print(f"[DEBUG] Caminho do cookies.txt: {self.cookies_path}")
         
-        # Gera o arquivo de cookies se não existir
-        if not os.path.exists(self.cookies_path):
-            print("[DEBUG] Arquivo de cookies não encontrado, gerando novo arquivo...")
-            self.generate_cookies()
-        
-        # Verifica se o arquivo de cookies existe e está no formato correto
-        if os.path.exists(self.cookies_path):
-            print(f"[DEBUG] Arquivo de cookies encontrado em: {self.cookies_path}")
-            try:
-                with open(self.cookies_path, 'r') as f:
-                    first_line = f.readline().strip()
-                    if first_line.startswith('# Netscape HTTP Cookie File'):
-                        print("[DEBUG] Arquivo de cookies está no formato correto")
-                    else:
-                        print(f"[AVISO] Arquivo de cookies em formato inválido: {self.cookies_path}")
-                        print("[AVISO] Gerando novo arquivo de cookies...")
-                        self.generate_cookies()
-            except Exception as e:
-                print(f"[AVISO] Erro ao verificar arquivo de cookies: {str(e)}")
-                print("[AVISO] Gerando novo arquivo de cookies...")
-                self.generate_cookies()
-        else:
-            print(f"[AVISO] Arquivo de cookies não encontrado em: {self.cookies_path}")
-            print("[AVISO] O bot pode ter problemas para acessar alguns vídeos.")
-            print("[AVISO] Gerando novo arquivo de cookies...")
-            self.generate_cookies()
+        # Configura o certificado SSL
+        os.environ['SSL_CERT_FILE'] = certifi.where()
+        ssl._create_default_https_context = ssl._create_unverified_context
         
         # Configurações do yt-dlp
-        self.ytdl_opts = {
-            'format': 'bestaudio/best',
-            'noplaylist': True,
-            'quiet': True,
-            'no_warnings': True,
-            'extract_flat': True,
-            'default_search': 'auto',
-            'nocheckcertificate': True,
-            'prefer_insecure': True,
-            'geo_bypass': True,
-            'geo_bypass_country': 'BR',
-            'cookiefile': self.cookies_path,  # Usa apenas o arquivo de cookies
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-us,en;q=0.5',
-                'Sec-Fetch-Mode': 'navigate',
-            }
-        }
+        self.ytdl_opts = YTDL_OPTIONS.copy()
 
     async def check_empty_channels(self):
         """Verifica periodicamente se há canais vazios e desconecta o bot"""
@@ -96,13 +58,13 @@ class MusicManager:
                 
                 for voice_client in voice_clients:
                     guild_id = voice_client.guild.id
+                    current_time = time.time()  # Define current_time aqui
                     
                     # Conta apenas usuários reais (não bots) no canal
                     real_users = [m for m in voice_client.channel.members if not m.bot]
                     
                     if not real_users:
                         # Se não houver usuários, verifica se já passou 3 minutos
-                        current_time = time.time()
                         last_check = self.last_user_check.get(guild_id, current_time)
                         
                         if current_time - last_check >= 180:  # 3 minutos = 180 segundos
@@ -122,113 +84,65 @@ class MusicManager:
                                 except:
                                     pass
                     else:
-                        # Se houver usuários, atualiza o timestamp
-                        self.last_user_check[guild_id] = time.time()
-
+                        # Se houver usuários, reseta o último check
+                        self.last_user_check[guild_id] = current_time
+                
+                # Espera 30 segundos antes da próxima verificação
+                await asyncio.sleep(30)
+                
             except Exception as e:
-                print(f"[DEBUG] Erro ao verificar canais vazios: {e}")
-                import traceback
-                print(f"[DEBUG] Stack trace: {traceback.format_exc()}")
+                print(f"[ERRO] Erro ao verificar canais vazios: {e}")
+                await asyncio.sleep(30)  # Espera 30 segundos mesmo em caso de erro
 
-            # Verifica a cada 30 segundos
-            await asyncio.sleep(30)
-
-    async def send_and_delete(self, channel, message, success=True):
-        """Envia uma mensagem e a deleta após um tempo"""
+    async def join_voice(self, channel):
+        """Conecta ao canal de voz"""
         try:
-            # Envia a mensagem
-            response = await channel.send(message)
+            # Verifica se já está conectado a algum canal
+            if channel.guild.voice_client:
+                # Se estiver em outro canal, move para o novo
+                if channel.guild.voice_client.channel != channel:
+                    await channel.guild.voice_client.move_to(channel)
+                return channel.guild.voice_client
             
-            # Define o tempo de espera (1 minuto para sucesso, 3 para erro)
-            wait_time = 60 if success else 180
-            
-            # Espera e deleta a resposta em uma task separada
-            async def delete_message():
-                try:
-                    await asyncio.sleep(wait_time)
-                    await response.delete()
-                except Exception as e:
-                    print(f"Erro ao deletar mensagem: {e}")
-            
-            # Cria uma task separada para deletar a mensagem
-            asyncio.create_task(delete_message())
+            # Se não estiver conectado, conecta ao novo canal
+            return await channel.connect()
             
         except Exception as e:
-            print(f"Erro ao gerenciar mensagens: {e}")
+            print(f"[ERRO] Erro ao conectar ao canal de voz: {e}")
+            return None
 
     def get_queue(self, guild_id):
         """Retorna a fila de músicas do servidor"""
         if guild_id not in self.queues:
             self.queues[guild_id] = deque()
-        elif not isinstance(self.queues[guild_id], deque):
-            # Se por algum motivo a fila não for um deque, converte para deque
-            self.queues[guild_id] = deque(self.queues[guild_id])
         return self.queues[guild_id]
-
-    async def join_voice(self, channel):
-        try:
-            # Se já estiver conectado no mesmo canal, retorna o voice_client
-            if channel.guild.voice_client and channel.guild.voice_client.channel == channel:
-                return channel.guild.voice_client
-            
-            # Se estiver em outro canal, desconecta
-            if channel.guild.voice_client:
-                await channel.guild.voice_client.disconnect()
-            
-            # Conecta ao novo canal
-            voice_client = await channel.connect()
-            return voice_client
-        except Exception as e:
-            print(f"Erro ao conectar ao canal de voz: {e}")
-            return None
-
-    async def leave_voice(self, guild_id):
-        try:
-            guild = self.bot.get_guild(guild_id)
-            if guild and guild.voice_client:
-                await guild.voice_client.disconnect()
-                # Limpa a fila ao sair
-                if guild_id in self.queues:
-                    self.queues[guild_id].clear()
-        except Exception as e:
-            print(f"Erro ao desconectar do canal de voz: {e}")
 
     async def play_next(self, voice_client, guild_id):
         """Toca a próxima música da fila"""
-        queue = self.get_queue(guild_id)
-        print(f"[DEBUG] play_next chamado. Tamanho da fila: {len(queue)}")
-        
-        if not queue:
-            print("[DEBUG] Fila vazia, retornando")
-            return
-
         try:
-            # Verifica se já está tocando
-            if voice_client.is_playing():
-                print("[DEBUG] Já está tocando, aguardando...")
+            # Verifica se o FFmpeg está funcionando
+            try:
+                ffmpeg_version = subprocess.check_output([str(self.ffmpeg_path), '-version']).decode()
+                print(f"[DEBUG] FFmpeg versão: {ffmpeg_version.split()[2]}")
+            except Exception as e:
+                print(f"[ERRO] FFmpeg não está funcionando corretamente: {e}")
+                return
+
+            queue = self.get_queue(guild_id)
+            if not queue:
+                print("[DEBUG] Fila vazia, nada para tocar")
                 return
 
             # Pega a próxima música da fila
-            next_song = queue[0]
-            info = next_song['info']
-            title = info.get('title', 'Música desconhecida')
-            url = info['url']
-            print(f"[DEBUG] Próxima música: {title}")
+            song = queue[0]
+            url = song['url']
+            title = song['title']
+
+            print(f"[DEBUG] Preparando para tocar: {title}")
             print(f"[DEBUG] URL: {url}")
 
-            # Atualiza a música atual
-            self.current_songs[guild_id] = title
-            # Reseta o estado de votação de skip
-            self.end_skip_vote(guild_id)
-
-            # Configurações do FFmpeg para evitar cortes
-            ffmpeg_options = {
-                'options': '-vn -b:a 192k -ar 48000 -ac 2',
-                'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -analyzeduration 0 -loglevel 0'
-            }
-
-            # Função para tocar a próxima música
             def after_playing(error):
+                """Callback após a música terminar"""
                 if error:
                     print(f"[DEBUG] Erro na reprodução: {error}")
                 print("[DEBUG] Música terminou, chamando play_next")
@@ -242,57 +156,64 @@ class MusicManager:
                     self.bot.loop
                 )
 
-            print("[DEBUG] Iniciando FFmpegPCMAudio")
-            
-            # Tenta baixar o áudio primeiro
-            with yt_dlp.YoutubeDL(self.ytdl_opts) as ydl:
-                try:
-                    print("[DEBUG] Baixando áudio...")
-                    info = ydl.extract_info(url, download=False)
-                    if not info:
-                        raise Exception("Não foi possível obter informações do vídeo")
-                    audio_url = info.get('url')
-                    if not audio_url:
-                        raise Exception("URL do áudio não encontrada")
-                    print("[DEBUG] Áudio baixado com sucesso")
-                except Exception as e:
-                    print(f"[DEBUG] Erro ao baixar áudio: {e}")
-                    # Remove a música da fila se houver erro
-                    if queue:
-                        queue.popleft()
-                    raise e
+            try:
+                # Configurações do FFmpeg para evitar cortes
+                ffmpeg_options = {
+                    'options': '-vn -b:a 192k -ar 48000 -ac 2 -loglevel error',
+                    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
+                }
 
-            # Envia mensagem no canal de texto antes de começar a tocar
-            if guild_id in self.text_channels:
-                channel = self.text_channels[guild_id]
+                # Toca a música
+                print("[DEBUG] Iniciando FFmpegPCMAudio")
+                print(f"[DEBUG] Caminho do FFmpeg: {self.ffmpeg_path}")
+                print(f"[DEBUG] Opções do FFmpeg: {ffmpeg_options}")
+                
+                # Verifica se a URL é válida
                 try:
-                    await channel.send(f"🎵 Tocando agora: **{title}**")
-                    print("[DEBUG] Mensagem de reprodução enviada")
+                    response = subprocess.run(
+                        [str(self.ffmpeg_path), '-i', url, '-f', 'null', '-'],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    print(f"[DEBUG] Teste de URL: {response.stderr}")
                 except Exception as e:
-                    print(f"[DEBUG] Erro ao enviar mensagem de reprodução: {e}")
+                    print(f"[DEBUG] Erro ao testar URL: {e}")
+                
+                voice_client.play(
+                    discord.FFmpegPCMAudio(
+                        url,
+                        executable=str(self.ffmpeg_path),
+                        **ffmpeg_options
+                    ),
+                    after=after_playing
+                )
+                print("[DEBUG] FFmpegPCMAudio iniciado com sucesso")
 
-            # Toca a música
-            voice_client.play(
-                discord.FFmpegPCMAudio(
-                    audio_url,
-                    executable=self.ffmpeg_path,
-                    **ffmpeg_options
-                ),
-                after=after_playing
-            )
-            print("[DEBUG] FFmpegPCMAudio iniciado")
+                # Envia mensagem no canal de texto apenas quando uma nova música começa a tocar
+                if guild_id in self.text_channels:
+                    channel = self.text_channels[guild_id]
+                    try:
+                        await channel.send(f"🎵 Tocando agora: **{title}**")
+                        print("[DEBUG] Mensagem de reprodução enviada")
+                    except Exception as e:
+                        print(f"[DEBUG] Erro ao enviar mensagem de reprodução: {e}")
+
+            except Exception as e:
+                print(f"[ERRO] Erro ao tocar música: {e}")
+                import traceback
+                print(f"[DEBUG] Stack trace: {traceback.format_exc()}")
+                # Se der erro, tenta tocar a próxima
+                if queue:
+                    queue.popleft()  # Remove a música que falhou
+                await self.play_next(voice_client, guild_id)
 
         except Exception as e:
-            print(f"[DEBUG] Erro detalhado ao tocar próxima música: {str(e)}")
-            print(f"[DEBUG] Tipo do erro: {type(e)}")
+            print(f"[ERRO] Erro em play_next: {e}")
             import traceback
             print(f"[DEBUG] Stack trace: {traceback.format_exc()}")
-            # Se der erro, tenta tocar a próxima
-            if queue:
-                queue.popleft()  # Remove a música que falhou
-            await self.play_next(voice_client, guild_id)
 
-    async def play_audio(self, voice_client, search: str, text_channel=None):
+    async def play_audio(self, voice_client, text_channel, search):
         """Reproduz áudio do YouTube"""
         try:
             # Verifica se o usuário está em um canal de voz
@@ -311,29 +232,20 @@ class MusicManager:
             if not search.startswith(('http://', 'https://')):
                 search = f"ytsearch:{search}"
 
-            # Busca o vídeo
             print(f"[DEBUG] Buscando com yt-dlp: {search}")
             
             # Tenta extrair informações do vídeo
             try:
                 with yt_dlp.YoutubeDL(self.ytdl_opts) as ydl:
                     print("[DEBUG] Iniciando extração de informações...")
-                    try:
-                        info = ydl.extract_info(search, download=False)
-                        print(f"[DEBUG] Informações extraídas: {info is not None}")
-                    except Exception as e:
-                        print(f"[DEBUG] Erro na extração: {str(e)}")
-                        # Tenta novamente com configurações mais básicas
-                        ydl_opts['nocheckcertificate'] = True
-                        ydl_opts['prefer_insecure'] = True
-                        info = ydl.extract_info(search, download=False)
+                    info = ydl.extract_info(search, download=False)
+                    print(f"[DEBUG] Informações extraídas: {info is not None}")
                     
                     if not info:
                         print("[DEBUG] Nenhuma informação retornada pelo yt-dlp")
                         await text_channel.send("❌ Não foi possível encontrar o vídeo. Por favor, tente novamente.")
                         return {'success': False, 'error': 'Não foi possível encontrar o vídeo.'}
-                    
-                    # Se for uma busca, pega o primeiro resultado
+                        
                     if 'entries' in info:
                         if not info['entries']:
                             print("[DEBUG] Lista de resultados vazia")
@@ -346,13 +258,13 @@ class MusicManager:
                         print("[DEBUG] URL não encontrada nas informações do vídeo")
                         await text_channel.send("❌ Não foi possível obter a URL do áudio!")
                         return {'success': False, 'error': 'Não foi possível obter a URL do áudio.'}
-                    
+                        
                     # Adiciona à fila
                     guild_id = voice_client.guild.id
                     if guild_id not in self.queues:
                         self.queues[guild_id] = deque()
                         self.text_channels[guild_id] = text_channel
-                    
+                        
                     self.queues[guild_id].append({
                         'url': info['url'],
                         'title': info.get('title', 'Título desconhecido'),
@@ -377,7 +289,7 @@ class MusicManager:
                             'message': f"🎵 Adicionado à fila: **{info.get('title', 'Título desconhecido')}**",
                             'is_playing': False
                         }
-                    
+                        
             except Exception as e:
                 print(f"[DEBUG] Erro na busca: {str(e)}")
                 print(f"[DEBUG] Tipo do erro: {type(e)}")
@@ -458,24 +370,20 @@ class MusicManager:
             print("[DEBUG] Iniciando geração de cookies...")
             # Configurações para gerar cookies
             ydl_opts = {
-                'cookiefile': self.cookies_path,
-                'cookiesfrombrowser': None,
                 'quiet': True,
                 'no_warnings': True,
-                'nocheckcertificate': True,
-                'prefer_insecure': True,
-                'geo_bypass': True,
-                'geo_bypass_country': 'BR',
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                }
+                'cookiefile': self.cookies_path,
+                'cookiesfrombrowser': ('chrome',),  # Tenta pegar cookies do Chrome
+                'cookiesfrombrowserargs': ['--user-data-dir=Default']  # Perfil padrão do Chrome
             }
             
-            # Tenta acessar o YouTube para gerar cookies
+            # Tenta gerar o arquivo de cookies
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.extract_info('https://www.youtube.com/watch?v=dQw4w9WgXcQ', download=False)
-            
+                ydl.download(['https://www.youtube.com/watch?v=dQw4w9WgXcQ'])  # Vídeo de teste
+                
             print("[DEBUG] Arquivo de cookies gerado com sucesso!")
+            return True
+            
         except Exception as e:
-            print(f"[ERRO] Falha ao gerar arquivo de cookies: {str(e)}")
-            print("[ERRO] O bot pode ter problemas para acessar alguns vídeos.")
+            print(f"[ERRO] Erro ao gerar cookies: {e}")
+            return False
