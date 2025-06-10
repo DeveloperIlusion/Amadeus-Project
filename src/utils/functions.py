@@ -8,7 +8,7 @@ def get_project_root() -> Path:
     """
     Retorna o caminho raiz do projeto.
     """
-    return Path(__file__).parent.parent
+    return Path(__file__).parent.parent.parent
 
 def get_resource_path(relative_path: str) -> str:
     """
@@ -20,13 +20,17 @@ def get_resource_path(relative_path: str) -> str:
     Returns:
         str: Caminho absoluto do recurso
     """
-    return str(get_project_root() / relative_path)
+    path = get_project_root() / relative_path
+    return str(path)
 
 def get_ffmpeg_path() -> str:
     """
     Retorna o caminho para o executável do FFmpeg.
     """
-    return get_resource_path("libraries/ffmpeg/bin/ffmpeg.exe")
+    path = get_resource_path("libraries/ffmpeg/bin/ffmpeg.exe")
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"FFmpeg não encontrado em: {path}")
+    return path
 
 def ensure_directory_exists(path: str) -> None:
     """

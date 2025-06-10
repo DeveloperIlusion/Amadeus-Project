@@ -5,10 +5,10 @@ import os
 import asyncio
 
 # Adiciona o diretório raiz ao PYTHONPATH
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from src.classes.music_manager import MusicManager
-from src.config.config import BOT_TOKEN, YTDL_OPTIONS, MESSAGE_DELETE_TIMES
+from src.core.audio_manager import MusicManager
+from src.config.settings import BOT_TOKEN, YTDL_OPTIONS, MESSAGE_DELETE_TIMES
 
 # Configuração do bot
 intents = discord.Intents.default()

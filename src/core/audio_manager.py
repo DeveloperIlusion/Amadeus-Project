@@ -6,8 +6,8 @@ import subprocess
 import os
 from collections import deque
 import time
-from ..functions import get_ffmpeg_path, get_resource_path
-from ..config.config import YTDL_OPTIONS, COOKIES_PATH
+from ..utils.functions import get_ffmpeg_path, get_resource_path
+from ..config.settings import YTDL_OPTIONS, COOKIES_PATH
 import certifi
 import ssl
 
@@ -28,12 +28,6 @@ class MusicManager:
         
         # Configura o caminho do FFmpeg
         self.ffmpeg_path = get_ffmpeg_path()
-        
-        # Verifica se o FFmpeg existe
-        if not os.path.exists(self.ffmpeg_path):
-            print(f"[ERRO] FFmpeg não encontrado em: {self.ffmpeg_path}")
-            print("[ERRO] Por favor, verifique se o FFmpeg está instalado e o caminho está correto.")
-            raise FileNotFoundError(f"FFmpeg não encontrado em: {self.ffmpeg_path}")
         
         # Inicia a task de verificação de usuários
         self.bot.loop.create_task(self.check_empty_channels())
