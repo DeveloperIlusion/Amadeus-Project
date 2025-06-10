@@ -25,7 +25,6 @@ COMMAND_PREFIX = "!"  # Prefixo para comandos do bot
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
-    'nocheckcertificate': True,
     'ignoreerrors': False,
     'logtostderr': False,
     'quiet': False,

@@ -44,7 +44,6 @@ class MusicManager:
         
         # Configura o certificado SSL
         os.environ['SSL_CERT_FILE'] = certifi.where()
-        ssl._create_default_https_context = ssl._create_unverified_context
         
         # Configurações do yt-dlp
         self.ytdl_opts = YTDL_OPTIONS.copy()
